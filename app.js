@@ -5,20 +5,20 @@
 
    BLE FLOW:
 
-   GG001 / ESP32 BLE GATT SERVER
-              ↓
-        Bluetooth
-              ↓
-       Student App
-        GATT CLIENT
-              ↓
-        Service 9001
-              ↓
-    Characteristic 9002
-              ↓
-        Read + Notify
-              ↓
-          Backend
+   GG001 / ESP32 GATT SERVER
+          ↓
+      Bluetooth
+          ↓
+     Student App
+      GATT CLIENT
+          ↓
+      Service 9001
+          ↓
+  Characteristic 9002
+          ↓
+     Read + Notify
+          ↓
+       Backend
    ========================================================= */
 
 
@@ -31,8 +31,6 @@ const SERVICE_UUID =
 
 const CHARACTERISTIC_UUID =
     "00009002-0000-1000-8000-00805F9B34FB";
-
-const TRACKER_NAME_PREFIX = "GG";
 
 
 /* =========================================================
@@ -117,7 +115,7 @@ disconnectBtn.addEventListener(
 
 
 /* =========================================================
-   CONNECT TO TRACKER
+   CONNECT TO BLE TRACKER
    ========================================================= */
 
 async function connectToTracker() {
@@ -129,22 +127,21 @@ async function connectToTracker() {
     );
 
     console.log(
-        "GeoGaurd BLE CONNECTION START"
+        "GEOGAURD BLE CONNECTION TEST"
     );
 
     console.log(
-        "====================================="
-    );
+        "=====================================");
 
 
     try {
 
         /* -----------------------------------------
-           STEP 1 — CHECK BLUETOOTH SUPPORT
+           STEP 1
            ----------------------------------------- */
 
         console.log(
-            "STEP 1: Checking Web Bluetooth support..."
+            "STEP 1: Checking Web Bluetooth..."
         );
 
 
@@ -158,18 +155,22 @@ async function connectToTracker() {
 
 
         console.log(
-            "✓ Web Bluetooth supported."
+            "✓ Web Bluetooth is supported."
         );
 
 
         setBLEStatus(
             "connecting",
-            "Scanning..."
+            "Opening Bluetooth..."
         );
 
 
         /* -----------------------------------------
-           STEP 2 — OPEN DEVICE PICKER
+           STEP 2
+           OPEN BLUETOOTH DEVICE PICKER
+           
+           TEMPORARY TEST:
+           Accept all BLE devices.
            ----------------------------------------- */
 
         console.log(
@@ -180,12 +181,7 @@ async function connectToTracker() {
         bluetoothDevice =
             await navigator.bluetooth.requestDevice({
 
-                filters: [
-                    {
-                        namePrefix:
-                            TRACKER_NAME_PREFIX
-                    }
-                ],
+                acceptAllDevices: true,
 
                 optionalServices: [
                     SERVICE_UUID
@@ -195,29 +191,36 @@ async function connectToTracker() {
 
 
         console.log(
-            "✓ Device selected:"
+            "✓ Device selected."
         );
 
+
         console.log(
-            "Name:",
+            "Device name:",
             bluetoothDevice.name
         );
 
+
         console.log(
-            "ID:",
+            "Device ID:",
             bluetoothDevice.id
         );
 
 
         setBLEStatus(
             "connecting",
-            `Selected: ${bluetoothDevice.name}`
+            `Selected: ${bluetoothDevice.name || "BLE Device"}`
         );
 
 
         /* -----------------------------------------
-           STEP 3 — DISCONNECT EVENT
+           STEP 3
            ----------------------------------------- */
+
+        console.log(
+            "STEP 3: Preparing GATT connection..."
+        );
+
 
         bluetoothDevice.addEventListener(
             "gattserverdisconnected",
@@ -225,45 +228,36 @@ async function connectToTracker() {
         );
 
 
+        if (!bluetoothDevice.gatt) {
+
+            throw new Error(
+                "This Bluetooth device does not expose GATT."
+            );
+
+        }
+
+
         /* -----------------------------------------
-           STEP 4 — CONNECT TO GATT SERVER
+           STEP 4
            ----------------------------------------- */
 
         console.log(
-            "STEP 3: Connecting to GATT server..."
+            "STEP 4: Connecting to GATT server..."
         );
 
 
         setBLEStatus(
             "connecting",
-            "Connecting to GATT..."
+            "Connecting..."
         );
-
-
-        if (!bluetoothDevice.gatt) {
-
-            throw new Error(
-                "GATT is not available on this Bluetooth device."
-            );
-
-        }
 
 
         bleServer =
             await bluetoothDevice.gatt.connect();
 
 
-        if (!bleServer) {
-
-            throw new Error(
-                "GATT connection returned no server."
-            );
-
-        }
-
-
         console.log(
-            "✓ GATT server connected."
+            "✓ GATT connection successful."
         );
 
 
@@ -274,23 +268,17 @@ async function connectToTracker() {
 
 
         /* -----------------------------------------
-           STEP 5 — DISCOVER SERVICE
+           STEP 5
            ----------------------------------------- */
 
         console.log(
-            "STEP 4: Discovering service..."
+            "STEP 5: Finding Service 9001..."
         );
 
 
         setBLEStatus(
             "connecting",
-            "Finding BLE service..."
-        );
-
-
-        console.log(
-            "Requested Service UUID:",
-            SERVICE_UUID
+            "Finding service..."
         );
 
 
@@ -301,34 +289,23 @@ async function connectToTracker() {
 
 
         console.log(
-            "✓ Service discovered."
-        );
-
-
-        console.log(
-            "Service UUID:",
+            "✓ Service found:",
             bleService.uuid
         );
 
 
         /* -----------------------------------------
-           STEP 6 — DISCOVER CHARACTERISTIC
+           STEP 6
            ----------------------------------------- */
 
         console.log(
-            "STEP 5: Discovering characteristic..."
+            "STEP 6: Finding Characteristic 9002..."
         );
 
 
         setBLEStatus(
             "connecting",
-            "Finding tracker characteristic..."
-        );
-
-
-        console.log(
-            "Requested Characteristic UUID:",
-            CHARACTERISTIC_UUID
+            "Finding characteristic..."
         );
 
 
@@ -339,49 +316,32 @@ async function connectToTracker() {
 
 
         console.log(
-            "✓ Characteristic discovered."
-        );
-
-
-        console.log(
-            "Characteristic UUID:",
+            "✓ Characteristic found:",
             bleCharacteristic.uuid
         );
 
 
         /* -----------------------------------------
-           STEP 7 — CHECK CHARACTERISTIC PROPERTIES
+           STEP 7
            ----------------------------------------- */
 
         console.log(
-            "STEP 6: Checking characteristic properties..."
+            "STEP 7: Checking characteristic properties..."
         );
 
 
-        if (
+        console.log(
             bleCharacteristic.properties
-        ) {
-
-            console.log(
-                "Characteristic properties:",
-                bleCharacteristic.properties
-            );
-
-        }
+        );
 
 
         /* -----------------------------------------
-           STEP 8 — READ INITIAL DATA
+           STEP 8
+           INITIAL READ
            ----------------------------------------- */
 
         console.log(
-            "STEP 7: Reading initial tracker data..."
-        );
-
-
-        setBLEStatus(
-            "connecting",
-            "Reading tracker data..."
+            "STEP 8: Reading tracker data..."
         );
 
 
@@ -400,14 +360,10 @@ async function connectToTracker() {
                 value
             );
 
-
         } catch (error) {
 
             console.warn(
-                "⚠ Initial read failed."
-            );
-
-            console.warn(
+                "Initial read failed:",
                 error
             );
 
@@ -415,17 +371,12 @@ async function connectToTracker() {
 
 
         /* -----------------------------------------
-           STEP 9 — ENABLE NOTIFICATIONS
+           STEP 9
+           NOTIFICATIONS
            ----------------------------------------- */
 
         console.log(
-            "STEP 8: Enabling notifications..."
-        );
-
-
-        setBLEStatus(
-            "connecting",
-            "Enabling live updates..."
+            "STEP 9: Starting notifications..."
         );
 
 
@@ -438,27 +389,24 @@ async function connectToTracker() {
                 "✓ Notifications enabled."
             );
 
-
         } catch (error) {
 
             console.error(
-                "✗ Notification setup failed."
-            );
-
-            console.error(
+                "Notification error:",
                 error
             );
 
 
             throw new Error(
-                "BLE characteristic does not support notifications."
+                "Could not enable BLE notifications."
             );
 
         }
 
 
         /* -----------------------------------------
-           STEP 10 — LISTEN FOR DATA
+           STEP 10
+           LISTEN FOR LIVE DATA
            ----------------------------------------- */
 
         bleCharacteristic.addEventListener(
@@ -468,12 +416,12 @@ async function connectToTracker() {
 
 
         console.log(
-            "✓ BLE notification listener attached."
+            "✓ Notification listener attached."
         );
 
 
         /* -----------------------------------------
-           STEP 11 — SUCCESS
+           SUCCESS
            ----------------------------------------- */
 
         isConnected =
@@ -521,7 +469,7 @@ async function connectToTracker() {
         );
 
         console.error(
-            "✗ GEOGAURD BLE CONNECTION FAILED"
+            "GEOGAURD BLE ERROR"
         );
 
         console.error(
@@ -559,16 +507,16 @@ async function connectToTracker() {
             true;
 
 
-        /* -----------------------------------------
-           USER CANCELLED DEVICE PICKER
-           ----------------------------------------- */
+        /*
+           User cancelled picker.
+        */
 
         if (
             error.name === "NotFoundError"
         ) {
 
             console.log(
-                "Bluetooth device selection cancelled."
+                "Bluetooth selection cancelled."
             );
 
 
@@ -579,6 +527,7 @@ async function connectToTracker() {
 
 
             return;
+
         }
 
 
@@ -588,13 +537,8 @@ async function connectToTracker() {
         );
 
 
-        /*
-           Show the actual error in the browser
-           console instead of hiding it.
-        */
-
         showError(
-            `BLE connection failed:\n\n${error.name}\n${error.message}`
+            `BLE connection failed.\n\n${error.name}\n${error.message}`
         );
 
     }
@@ -603,21 +547,13 @@ async function connectToTracker() {
 
 
 /* =========================================================
-   HANDLE BLE DATA
+   HANDLE BLE NOTIFICATION
    ========================================================= */
 
 function handleBLEData(event) {
 
     console.log(
-        "====================================="
-    );
-
-    console.log(
-        "BLE NOTIFICATION RECEIVED"
-    );
-
-    console.log(
-        "====================================="
+        "BLE notification received."
     );
 
 
@@ -630,7 +566,7 @@ function handleBLEData(event) {
     } catch (error) {
 
         console.error(
-            "BLE notification processing error:",
+            "Notification processing error:",
             error
         );
 
@@ -658,7 +594,7 @@ function processBLEValue(value) {
 
 
         console.log(
-            "Raw BLE data:",
+            "BLE data:",
             incomingData
         );
 
@@ -666,16 +602,6 @@ function processBLEValue(value) {
         receivedBuffer +=
             incomingData;
 
-
-        console.log(
-            "Current buffer:",
-            receivedBuffer
-        );
-
-
-        /*
-           Try complete JSON.
-        */
 
         try {
 
@@ -689,21 +615,15 @@ function processBLEValue(value) {
                 "";
 
 
-            console.log(
-                "✓ Complete JSON received:",
-                data
-            );
-
-
             processTrackerData(
                 data
             );
 
 
-        } catch (parseError) {
+        } catch (error) {
 
             console.log(
-                "JSON incomplete. Waiting for more BLE data..."
+                "Waiting for complete JSON..."
             );
 
         }
@@ -727,7 +647,7 @@ function processBLEValue(value) {
 function processTrackerData(data) {
 
     console.log(
-        "Processing tracker data:",
+        "Tracker data:",
         data
     );
 
@@ -805,12 +725,6 @@ function processTrackerData(data) {
             new Date().toISOString()
 
     };
-
-
-    console.log(
-        "Standardized tracker data:",
-        lastTrackerData
-    );
 
 
     updateStudentInformation(
@@ -907,7 +821,7 @@ function updateStudentInformation(data) {
 
 
 /* =========================================================
-   UPDATE SOS
+   SOS STATUS
    ========================================================= */
 
 function updateSOSStatus(sos) {
@@ -974,7 +888,7 @@ function updateJSON(data) {
 
 
 /* =========================================================
-   SEND DATA TO BACKEND
+   BACKEND
    ========================================================= */
 
 async function sendToBackend(data) {
@@ -986,8 +900,8 @@ async function sendToBackend(data) {
 
 
     /*
-       PART 3 BACKEND CONNECTION
-       WILL BE ADDED LATER.
+       Real backend connection will be added
+       after BLE communication works.
     */
 
     backendStatus.textContent =
@@ -1011,13 +925,13 @@ async function sendToBackend(data) {
 
 
 /* =========================================================
-   DISCONNECT TRACKER
+   DISCONNECT
    ========================================================= */
 
 async function disconnectTracker() {
 
     console.log(
-        "Disconnecting GG tracker..."
+        "Disconnecting tracker..."
     );
 
 
@@ -1032,15 +946,10 @@ async function disconnectTracker() {
                 await bleCharacteristic
                     .stopNotifications();
 
-
-                console.log(
-                    "Notifications stopped."
-                );
-
             } catch (error) {
 
                 console.warn(
-                    "Notification stop error:",
+                    "Stop notification error:",
                     error
                 );
 
@@ -1056,11 +965,6 @@ async function disconnectTracker() {
         ) {
 
             bluetoothDevice.gatt.disconnect();
-
-
-            console.log(
-                "GATT disconnected."
-            );
 
         }
 
@@ -1086,7 +990,7 @@ async function disconnectTracker() {
 function handleDisconnected() {
 
     console.warn(
-        "GG tracker unexpectedly disconnected."
+        "Tracker disconnected."
     );
 
 
@@ -1172,7 +1076,7 @@ function resetBLEState() {
 
 
 /* =========================================================
-   UPDATE BLE STATUS
+   BLE STATUS
    ========================================================= */
 
 function setBLEStatus(
@@ -1215,7 +1119,7 @@ function setBLEStatus(
 
 
 /* =========================================================
-   ERROR MESSAGE
+   ERROR
    ========================================================= */
 
 function showError(message) {
@@ -1233,19 +1137,13 @@ function showError(message) {
 
 
 /* =========================================================
-   INITIALIZE APP
+   INITIALIZE
    ========================================================= */
 
 function initializeApp() {
 
     console.log(
         "GeoGaurd Student App started."
-    );
-
-
-    console.log(
-        "Tracker prefix:",
-        TRACKER_NAME_PREFIX
     );
 
 
@@ -1278,7 +1176,8 @@ function initializeApp() {
 
 
 /* =========================================================
-   START APPLICATION
+   START
    ========================================================= */
 
 initializeApp();
+
