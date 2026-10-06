@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoGaurd Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+
+        <header class="app-header">
+            <div>
+                <h1>GeoGaurd</h1>
+                <p>Live Student Dashboard</p>
+            </div>
+            <a href="index.html" style="font-size:13px;color:#2563eb;font-weight:700;text-decoration:none;">Student App</a>
+        </header>
+
+        <section class="card">
+            <div class="card-header">
+                <div>
+                    <h2>All Students</h2>
+                    <p>Updates every 2 seconds from the backend</p>
+                </div>
+                <span id="allStatus" class="status-badge disconnected">Waiting</span>
+            </div>
+            <div id="allStudents" style="overflow-x:auto">Waiting...</div>
+        </section>
+
+    </div>
+
+    <script src="backend.js"></script>
+    <script>startStudentsView("allStudents", "allStatus");</script>
+</body>
+</html>
