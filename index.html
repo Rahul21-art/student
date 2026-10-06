@@ -41,6 +41,31 @@
         </section>
 
 
+        <!-- TRACK FROM BACKEND (testing / simulator) -->
+        <section class="card">
+            <div class="card-header">
+                <div>
+                    <h2>Track from Backend</h2>
+                    <p>No BLE tracker? Follow a student's data from the backend</p>
+                </div>
+            </div>
+
+            <input
+                id="followId"
+                type="text"
+                value="ST001"
+                placeholder="Student ID, e.g. ST001"
+                style="width:100%;padding:12px;border:1px solid #d1d5db;border-radius:9px;font-size:15px;margin-bottom:12px;"
+            >
+
+            <button id="followBtn" class="primary-btn">Start Tracking</button>
+
+            <p id="followStatus" style="font-size:13px;color:#6b7280;margin-top:8px;">
+                Not tracking
+            </p>
+        </section>
+
+
         <!-- STUDENT INFORMATION -->
         <section class="card">
             <div class="card-header">
