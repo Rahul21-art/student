@@ -1,1186 +1,356 @@
-
 /* =========================================================
-   GeoGaurd Student App
-   app.js
-
-   BLE FLOW:
-
-   GG001 / ESP32 GATT SERVER
-          ↓
-      Bluetooth
-          ↓
-     Student App
-      GATT CLIENT
-          ↓
-      Service 9001
-          ↓
-  Characteristic 9002
-          ↓
-     Read + Notify
-          ↓
-       Backend
+   GeoGaurd Student App - app.js (corrected)
+   BLE: GG001 (GATT server) -> Service 9001 -> Char 9002 (Read + Notify)
    ========================================================= */
 
-
-/* =========================================================
-   BLE CONFIGURATION
-   ========================================================= */
-
-/*
-   IMPORTANT:
-   Chrome requires UUIDs used in requestDevice()
-   to be valid UUID strings.
-
-   Use lowercase hexadecimal.
-*/
-
-const SERVICE_UUID =
-    "00009001-0000-1000-8000-00805f9b34fb";
-
-const CHARACTERISTIC_UUID =
-    "00009002-0000-1000-8000-00805f9b34fb";
-
-
+const SERVICE_UUID = "00009001-0000-1000-8000-00805f9b34fb";
+const CHARACTERISTIC_UUID = "00009002-0000-1000-8000-00805f9b34fb";
 const TRACKER_NAME_PREFIX = "GG";
+const POLL_INTERVAL_MS = 3000;   // fallback read in case notifications don't arrive
+const MAX_BUFFER_CHARS = 2000;
 
-
-/* =========================================================
-   VARIABLES
-   ========================================================= */
-
+/* ---------- State ---------- */
 let bluetoothDevice = null;
-
 let bleServer = null;
-
 let bleService = null;
-
 let bleCharacteristic = null;
-
 let isConnected = false;
-
 let lastTrackerData = null;
-
 let receivedBuffer = "";
+let pollTimer = null;
 
+/* ---------- Elements ---------- */
+const $ = (id) => document.getElementById(id);
 
-/* =========================================================
-   HTML ELEMENTS
-   ========================================================= */
+const connectBtn = $("connectBtn");
+const disconnectBtn = $("disconnectBtn");
+const connectionIndicator = $("connectionIndicator");
+const connectionText = $("connectionText");
+const bleStatus = $("bleStatus");
+const studentIdElement = $("studentId");
+const batteryElement = $("battery");
+const sosElement = $("sos");
+const dataStatusElement = $("dataStatus");
+const latitudeElement = $("latitude");
+const longitudeElement = $("longitude");
+const lastUpdateElement = $("lastUpdate");
+const backendStatus = $("backendStatus");
+const backendMessage = $("backendMessage");
+const liveJson = $("liveJson");
 
-const connectBtn =
-    document.getElementById("connectBtn");
-
-const disconnectBtn =
-    document.getElementById("disconnectBtn");
-
-const connectionIndicator =
-    document.getElementById("connectionIndicator");
-
-const connectionText =
-    document.getElementById("connectionText");
-
-const bleStatus =
-    document.getElementById("bleStatus");
-
-const studentIdElement =
-    document.getElementById("studentId");
-
-const batteryElement =
-    document.getElementById("battery");
-
-const sosElement =
-    document.getElementById("sos");
-
-const dataStatusElement =
-    document.getElementById("dataStatus");
-
-const latitudeElement =
-    document.getElementById("latitude");
-
-const longitudeElement =
-    document.getElementById("longitude");
-
-const lastUpdateElement =
-    document.getElementById("lastUpdate");
-
-const backendStatus =
-    document.getElementById("backendStatus");
-
-const backendMessage =
-    document.getElementById("backendMessage");
-
-const liveJson =
-    document.getElementById("liveJson");
-
+connectBtn.addEventListener("click", connectToTracker);
+disconnectBtn.addEventListener("click", disconnectTracker);
 
 /* =========================================================
-   BUTTON EVENTS
-   ========================================================= */
-
-connectBtn.addEventListener(
-    "click",
-    connectToTracker
-);
-
-disconnectBtn.addEventListener(
-    "click",
-    disconnectTracker
-);
-
-
-/* =========================================================
-   CONNECT TO BLE TRACKER
+   CONNECT
    ========================================================= */
 
 async function connectToTracker() {
-
     console.clear();
-
-    console.log(
-        "====================================="
-    );
-
-    console.log(
-        "GEOGAURD BLE CONNECTION START"
-    );
-
-    console.log(
-        "=====================================");
-
+    console.log("===== GEOGAURD BLE CONNECTION START =====");
 
     try {
-
-        /* -----------------------------------------
-           STEP 1
-           ----------------------------------------- */
-
-        console.log(
-            "STEP 1: Checking Web Bluetooth..."
-        );
-
-
         if (!navigator.bluetooth) {
-
-            throw new Error(
-                "Web Bluetooth is not supported by this browser."
-            );
-
+            throw new Error("Web Bluetooth is not supported by this browser.");
         }
 
-
-        console.log(
-            "✓ Web Bluetooth supported."
-        );
-
-
-        setBLEStatus(
-            "connecting",
-            "Scanning..."
-        );
-
-
-        /* -----------------------------------------
-           STEP 2
-           BLUETOOTH DEVICE PICKER
-           ----------------------------------------- */
-
-        console.log(
-            "STEP 2: Opening Bluetooth device picker..."
-        );
-
-
-        bluetoothDevice =
-            await navigator.bluetooth.requestDevice({
-
-                filters: [
-                    {
-                        namePrefix:
-                            TRACKER_NAME_PREFIX
-                    }
-                ],
-
-                optionalServices: [
-                    SERVICE_UUID
-                ]
-
-            });
-
-
-        console.log(
-            "✓ Device selected:"
-        );
-
-
-        console.log(
-            "Device name:",
-            bluetoothDevice.name
-        );
-
-
-        console.log(
-            "Device ID:",
-            bluetoothDevice.id
-        );
-
-
-        setBLEStatus(
-            "connecting",
-            `Selected: ${bluetoothDevice.name || "GG Tracker"}`
-        );
-
-
-        /* -----------------------------------------
-           STEP 3
-           DISCONNECT LISTENER
-           ----------------------------------------- */
-
-        bluetoothDevice.addEventListener(
-            "gattserverdisconnected",
-            handleDisconnected
-        );
-
-
-        /* -----------------------------------------
-           STEP 4
-           GATT CONNECTION
-           ----------------------------------------- */
-
-        console.log(
-            "STEP 3: Connecting to GATT server..."
-        );
-
-
-        setBLEStatus(
-            "connecting",
-            "Connecting..."
-        );
-
-
-        if (!bluetoothDevice.gatt) {
-
-            throw new Error(
-                "GATT is not available on this device."
-            );
-
-        }
-
-
-        bleServer =
-            await bluetoothDevice.gatt.connect();
-
-
-        console.log(
-            "✓ GATT server connected."
-        );
-
-
-        console.log(
-            "GATT connected:",
-            bluetoothDevice.gatt.connected
-        );
-
-
-        /* -----------------------------------------
-           STEP 5
-           SERVICE
-           ----------------------------------------- */
-
-        console.log(
-            "STEP 4: Discovering service..."
-        );
-
-
-        setBLEStatus(
-            "connecting",
-            "Finding service..."
-        );
-
-
-        bleService =
-            await bleServer.getPrimaryService(
-                SERVICE_UUID
-            );
-
-
-        console.log(
-            "✓ Service discovered:"
-        );
-
-
-        console.log(
-            bleService.uuid
-        );
-
-
-        /* -----------------------------------------
-           STEP 6
-           CHARACTERISTIC
-           ----------------------------------------- */
-
-        console.log(
-            "STEP 5: Discovering characteristic..."
-        );
-
-
-        setBLEStatus(
-            "connecting",
-            "Finding characteristic..."
-        );
-
-
-        bleCharacteristic =
-            await bleService.getCharacteristic(
-                CHARACTERISTIC_UUID
-            );
-
-
-        console.log(
-            "✓ Characteristic discovered:"
-        );
-
-
-        console.log(
-            bleCharacteristic.uuid
-        );
-
-
-        /* -----------------------------------------
-           STEP 7
-           CHARACTERISTIC PROPERTIES
-           ----------------------------------------- */
-
-        console.log(
-            "STEP 6: Characteristic properties:"
-        );
-
-
-        console.log(
-            bleCharacteristic.properties
-        );
-
-
-        /* -----------------------------------------
-           STEP 8
-           INITIAL READ
-           ----------------------------------------- */
-
-        console.log(
-            "STEP 7: Reading tracker data..."
-        );
-
-
+        setBLEStatus("connecting", "Scanning...");
+
+        console.log("STEP 1: Opening device picker...");
+        bluetoothDevice = await navigator.bluetooth.requestDevice({
+            filters: [{ namePrefix: TRACKER_NAME_PREFIX }],
+            optionalServices: [SERVICE_UUID]
+        });
+        console.log("Device:", bluetoothDevice.name, bluetoothDevice.id);
+
+        bluetoothDevice.addEventListener("gattserverdisconnected", handleDisconnected);
+
+        console.log("STEP 2: Connecting to GATT...");
+        setBLEStatus("connecting", "Connecting...");
+        bleServer = await bluetoothDevice.gatt.connect();
+
+        console.log("STEP 3: Getting service...");
+        setBLEStatus("connecting", "Finding service...");
+        bleService = await bleServer.getPrimaryService(SERVICE_UUID);
+
+        console.log("STEP 4: Getting characteristic...");
+        setBLEStatus("connecting", "Finding characteristic...");
+        bleCharacteristic = await bleService.getCharacteristic(CHARACTERISTIC_UUID);
+        console.log("Properties:", bleCharacteristic.properties);
+
+        /* Notifications first, so no update is missed */
+        console.log("STEP 5: Enabling notifications...");
+        bleCharacteristic.addEventListener("characteristicvaluechanged", handleBLEData);
         try {
-
-            const value =
-                await bleCharacteristic.readValue();
-
-
-            console.log(
-                "✓ Initial tracker data received."
-            );
-
-
-            processBLEValue(
-                value
-            );
-
-        } catch (error) {
-
-            console.warn(
-                "Initial read failed:"
-            );
-
-
-            console.warn(
-                error
-            );
-
+            await bleCharacteristic.startNotifications();
+            console.log("Notifications enabled.");
+        } catch (e) {
+            console.warn("Notifications unavailable, using polling only:", e);
         }
 
+        /* Initial read */
+        console.log("STEP 6: Initial read...");
+        try {
+            const value = await bleCharacteristic.readValue();
+            processBLEValue(value);
+        } catch (e) {
+            console.warn("Initial read failed:", e);
+        }
 
-        /* -----------------------------------------
-           STEP 9
-           NOTIFICATIONS
-           ----------------------------------------- */
+        /* Fallback polling */
+        clearInterval(pollTimer);
+        pollTimer = setInterval(pollTracker, POLL_INTERVAL_MS);
 
-        console.log(
-            "STEP 8: Enabling notifications..."
-        );
+        isConnected = true;
+        setBLEStatus("connected", `Connected: ${bluetoothDevice.name || "GG Tracker"}`);
+        connectBtn.disabled = true;
+        disconnectBtn.disabled = false;
+        dataStatusElement.textContent = "Connected";
+        backendMessage.textContent = "Waiting for tracker data";
 
-
-        await bleCharacteristic.startNotifications();
-
-
-        console.log(
-            "✓ Notifications enabled."
-        );
-
-
-        /* -----------------------------------------
-           STEP 10
-           NOTIFICATION LISTENER
-           ----------------------------------------- */
-
-        bleCharacteristic.addEventListener(
-            "characteristicvaluechanged",
-            handleBLEData
-        );
-
-
-        console.log(
-            "✓ Notification listener attached."
-        );
-
-
-        /* -----------------------------------------
-           STEP 11
-           SUCCESS
-           ----------------------------------------- */
-
-        isConnected =
-            true;
-
-
-        setBLEStatus(
-            "connected",
-            `Connected: ${bluetoothDevice.name || "GG Tracker"}`
-        );
-
-
-        connectBtn.disabled =
-            true;
-
-
-        disconnectBtn.disabled =
-            false;
-
-
-        dataStatusElement.textContent =
-            "Connected";
-
-
-        backendMessage.textContent =
-            "Waiting for tracker data";
-
-
-        console.log(
-            "====================================="
-        );
-
-        console.log(
-            "✓ GEOGAURD BLE CONNECTION SUCCESS"
-        );
-
-        console.log(
-            "=====================================");
-
+        console.log("===== GEOGAURD BLE CONNECTION SUCCESS =====");
 
     } catch (error) {
+        console.error("GEOGAURD BLE ERROR:", error.name, error.message);
 
-        console.error(
-            "====================================="
-        );
+        isConnected = false;
+        connectBtn.disabled = false;
+        disconnectBtn.disabled = true;
 
-        console.error(
-            "GEOGAURD BLE ERROR"
-        );
-
-        console.error(
-            "====================================="
-        );
-
-
-        console.error(
-            "Error name:",
-            error.name
-        );
-
-
-        console.error(
-            "Error message:",
-            error.message
-        );
-
-
-        console.error(
-            "Full error:",
-            error
-        );
-
-
-        isConnected =
-            false;
-
-
-        connectBtn.disabled =
-            false;
-
-
-        disconnectBtn.disabled =
-            true;
-
-
-        /* -----------------------------------------
-           USER CANCELLED PICKER
-           ----------------------------------------- */
-
-        if (
-            error.name === "NotFoundError"
-        ) {
-
-            setBLEStatus(
-                "disconnected",
-                "Disconnected"
-            );
-
-
+        if (error.name === "NotFoundError") {   // user cancelled picker
+            setBLEStatus("disconnected", "Disconnected");
             return;
-
         }
 
-
-        setBLEStatus(
-            "disconnected",
-            "Connection Failed"
-        );
-
-
-        showError(
-            `${error.name}\n\n${error.message}`
-        );
-
+        setBLEStatus("disconnected", "Connection Failed");
+        showError(`${error.name}\n\n${error.message}`);
     }
-
 }
 
+/* =========================================================
+   POLLING FALLBACK
+   ========================================================= */
+
+async function pollTracker() {
+    try {
+        if (bleCharacteristic && bluetoothDevice && bluetoothDevice.gatt.connected) {
+            const value = await bleCharacteristic.readValue();
+            processBLEValue(value);
+        }
+    } catch (e) {
+        console.warn("Poll read failed:", e);
+    }
+}
 
 /* =========================================================
-   HANDLE BLE NOTIFICATION
+   RECEIVE DATA
    ========================================================= */
 
 function handleBLEData(event) {
-
-    console.log(
-        "BLE notification received."
-    );
-
-
     try {
-
-        processBLEValue(
-            event.target.value
-        );
-
+        processBLEValue(event.target.value);
     } catch (error) {
-
-        console.error(
-            "BLE notification error:",
-            error
-        );
-
+        console.error("BLE notification error:", error);
     }
-
 }
-
-
-/* =========================================================
-   PROCESS BLE VALUE
-   ========================================================= */
 
 function processBLEValue(value) {
-
     try {
-
-        const decoder =
-            new TextDecoder("utf-8");
-
-
-        const incomingData =
-            decoder.decode(
-                value
-            );
-
-
-        console.log(
-            "BLE data received:",
-            incomingData
-        );
-
-
-        receivedBuffer +=
-            incomingData;
-
-
-        try {
-
-            const data =
-                JSON.parse(
-                    receivedBuffer
-                );
-
-
-            receivedBuffer =
-                "";
-
-
-            console.log(
-                "Complete tracker JSON:",
-                data
-            );
-
-
-            processTrackerData(
-                data
-            );
-
-
-        } catch (error) {
-
-            console.log(
-                "Waiting for complete JSON..."
-            );
-
+        if (!value || value.byteLength === 0) {
+            console.warn("Empty BLE value (0 bytes). Set the characteristic value in the simulator app.");
+            dataStatusElement.textContent = "Empty value";
+            return;
         }
 
+        const incoming = new TextDecoder("utf-8").decode(value);
+        console.log(`BLE data received (${value.byteLength} bytes):`, incoming);
+
+        /* A new message starts with "{": drop stale partial data */
+        if (incoming.trim().startsWith("{")) {
+            receivedBuffer = "";
+        }
+
+        receivedBuffer += incoming;
+
+        if (receivedBuffer.length > MAX_BUFFER_CHARS) {
+            console.warn("Buffer too large, resetting.");
+            receivedBuffer = "";
+            return;
+        }
+
+        let data;
+        try {
+            data = JSON.parse(receivedBuffer);
+        } catch (e) {
+            console.log("Waiting for complete JSON. Buffer so far:", receivedBuffer);
+            return;
+        }
+
+        receivedBuffer = "";
+        console.log("Complete tracker JSON:", data);
+        processTrackerData(data);
+
     } catch (error) {
-
-        console.error(
-            "BLE decoding error:",
-            error
-        );
-
+        console.error("BLE decoding error:", error);
     }
-
 }
-
 
 /* =========================================================
    PROCESS TRACKER DATA
+   Accepts full keys (studentId, latitude, longitude, battery)
+   and short keys (id, lat, lon, bat).
    ========================================================= */
 
 function processTrackerData(data) {
-
-    console.log(
-        "Processed tracker data:",
-        data
-    );
-
-
-    if (
-        !data ||
-        typeof data !== "object"
-    ) {
-
-        console.error(
-            "Invalid tracker data."
-        );
-
+    if (!data || typeof data !== "object") {
+        console.error("Invalid tracker data.");
         return;
-
     }
 
-
-    const studentId =
-        data.studentId ||
-        data.id ||
-        "UNKNOWN";
-
-
-    const latitude =
-        Number(
-            data.latitude
-        );
-
-
-    const longitude =
-        Number(
-            data.longitude
-        );
-
-
-    const battery =
-        Number(
-            data.battery
-        );
-
-
-    const sos =
-        data.sos ||
-        "OFF";
-
-
-    const trackerId =
-        bluetoothDevice?.name ||
-        "GG Tracker";
-
-
     lastTrackerData = {
-
-        studentId:
-            studentId,
-
-        trackerId:
-            trackerId,
-
-        latitude:
-            latitude,
-
-        longitude:
-            longitude,
-
-        battery:
-            battery,
-
-        sos:
-            sos,
-
-        timestamp:
-            data.timestamp ||
-            new Date().toISOString()
-
+        studentId: data.studentId || data.id || "UNKNOWN",
+        trackerId: (bluetoothDevice && bluetoothDevice.name) || "GG Tracker",
+        latitude: Number(data.latitude ?? data.lat),
+        longitude: Number(data.longitude ?? data.lon),
+        battery: Number(data.battery ?? data.bat),
+        sos: data.sos || "OFF",
+        timestamp: data.timestamp || new Date().toISOString()
     };
 
-
-    updateStudentInformation(
-        lastTrackerData
-    );
-
-
-    updateJSON(
-        lastTrackerData
-    );
-
-
-    dataStatusElement.textContent =
-        "Receiving";
-
-
-    sendToBackend(
-        lastTrackerData
-    );
-
+    updateStudentInformation(lastTrackerData);
+    updateJSON(lastTrackerData);
+    dataStatusElement.textContent = "Receiving";
+    sendToBackend(lastTrackerData);
 }
 
-
 /* =========================================================
-   UPDATE STUDENT INFORMATION
+   UI UPDATES
    ========================================================= */
 
 function updateStudentInformation(data) {
+    studentIdElement.textContent = data.studentId;
 
-    studentIdElement.textContent =
-        data.studentId;
+    batteryElement.textContent = Number.isFinite(data.battery) ? `${data.battery}%` : "--%";
+    latitudeElement.textContent = Number.isFinite(data.latitude) ? data.latitude.toFixed(6) : "--";
+    longitudeElement.textContent = Number.isFinite(data.longitude) ? data.longitude.toFixed(6) : "--";
 
-
-    if (
-        Number.isFinite(
-            data.battery
-        )
-    ) {
-
-        batteryElement.textContent =
-            `${data.battery}%`;
-
-    } else {
-
-        batteryElement.textContent =
-            "--%";
-
-    }
-
-
-    if (
-        Number.isFinite(
-            data.latitude
-        )
-    ) {
-
-        latitudeElement.textContent =
-            data.latitude.toFixed(6);
-
-    } else {
-
-        latitudeElement.textContent =
-            "--";
-
-    }
-
-
-    if (
-        Number.isFinite(
-            data.longitude
-        )
-    ) {
-
-        longitudeElement.textContent =
-            data.longitude.toFixed(6);
-
-    } else {
-
-        longitudeElement.textContent =
-            "--";
-
-    }
-
-
-    updateSOSStatus(
-        data.sos
-    );
-
-
-    lastUpdateElement.textContent =
-        new Date().toLocaleTimeString();
-
+    updateSOSStatus(data.sos);
+    lastUpdateElement.textContent = new Date().toLocaleTimeString();
 }
-
-
-/* =========================================================
-   SOS STATUS
-   ========================================================= */
 
 function updateSOSStatus(sos) {
+    const s = String(sos).toUpperCase();
+    const active = s === "ON" || s === "ACTIVE" || s === "TRUE";
 
-    const normalizedSOS =
-        String(
-            sos
-        ).toUpperCase();
-
-
-    if (
-        normalizedSOS === "ON" ||
-        normalizedSOS === "ACTIVE" ||
-        normalizedSOS === "TRUE"
-    ) {
-
-        sosElement.textContent =
-            "SOS ACTIVE";
-
-
-        sosElement.classList.remove(
-            "sos-off"
-        );
-
-
-        sosElement.classList.add(
-            "sos-on"
-        );
-
-    } else {
-
-        sosElement.textContent =
-            "OFF";
-
-
-        sosElement.classList.remove(
-            "sos-on"
-        );
-
-
-        sosElement.classList.add(
-            "sos-off"
-        );
-
-    }
-
+    sosElement.textContent = active ? "SOS ACTIVE" : "OFF";
+    sosElement.classList.toggle("sos-on", active);
+    sosElement.classList.toggle("sos-off", !active);
 }
-
-
-/* =========================================================
-   UPDATE JSON
-   ========================================================= */
 
 function updateJSON(data) {
-
-    liveJson.textContent =
-        JSON.stringify(
-            data,
-            null,
-            2
-        );
-
+    liveJson.textContent = JSON.stringify(data, null, 2);
 }
 
-
 /* =========================================================
-   BACKEND
+   BACKEND (placeholder)
    ========================================================= */
 
 async function sendToBackend(data) {
+    console.log("Tracker data ready for backend:", data);
 
-    console.log(
-        "Tracker data ready for backend:",
-        data
-    );
-
-
-    backendStatus.textContent =
-        "Ready";
-
-
-    backendStatus.classList.remove(
-        "disconnected"
-    );
-
-
-    backendStatus.classList.add(
-        "connected"
-    );
-
-
-    backendMessage.textContent =
-        "Tracker data ready for backend";
-
+    backendStatus.textContent = "Ready";
+    backendStatus.classList.remove("disconnected");
+    backendStatus.classList.add("connected");
+    backendMessage.textContent = "Tracker data ready for backend";
 }
-
 
 /* =========================================================
    DISCONNECT
    ========================================================= */
 
 async function disconnectTracker() {
+    clearInterval(pollTimer);
+    pollTimer = null;
 
     try {
-
-        if (
-            bleCharacteristic
-        ) {
-
+        if (bleCharacteristic) {
+            bleCharacteristic.removeEventListener("characteristicvaluechanged", handleBLEData);
             try {
-
-                await bleCharacteristic
-                    .stopNotifications();
-
-            } catch (error) {
-
-                console.warn(
-                    "Stop notification error:",
-                    error
-                );
-
+                await bleCharacteristic.stopNotifications();
+            } catch (e) {
+                console.warn("Stop notification error:", e);
             }
-
         }
 
-
-        if (
-            bluetoothDevice &&
-            bluetoothDevice.gatt &&
-            bluetoothDevice.gatt.connected
-        ) {
-
+        if (bluetoothDevice && bluetoothDevice.gatt && bluetoothDevice.gatt.connected) {
             bluetoothDevice.gatt.disconnect();
-
         }
-
     } catch (error) {
-
-        console.error(
-            "Disconnect error:",
-            error
-        );
-
+        console.error("Disconnect error:", error);
     }
 
-
     resetBLEState();
-
 }
-
-
-/* =========================================================
-   UNEXPECTED DISCONNECT
-   ========================================================= */
 
 function handleDisconnected() {
-
-    console.warn(
-        "GG tracker disconnected."
-    );
-
-
+    console.warn("GG tracker disconnected.");
+    clearInterval(pollTimer);
+    pollTimer = null;
     resetBLEState();
-
 }
-
-
-/* =========================================================
-   RESET BLE STATE
-   ========================================================= */
 
 function resetBLEState() {
+    isConnected = false;
+    bluetoothDevice = null;
+    bleServer = null;
+    bleService = null;
+    bleCharacteristic = null;
+    receivedBuffer = "";
+    lastTrackerData = null;
 
-    isConnected =
-        false;
+    setBLEStatus("disconnected", "Disconnected");
+    connectBtn.disabled = false;
+    disconnectBtn.disabled = true;
+    dataStatusElement.textContent = "Waiting";
 
-
-    bluetoothDevice =
-        null;
-
-
-    bleServer =
-        null;
-
-
-    bleService =
-        null;
-
-
-    bleCharacteristic =
-        null;
-
-
-    receivedBuffer =
-        "";
-
-
-    lastTrackerData =
-        null;
-
-
-    setBLEStatus(
-        "disconnected",
-        "Disconnected"
-    );
-
-
-    connectBtn.disabled =
-        false;
-
-
-    disconnectBtn.disabled =
-        true;
-
-
-    dataStatusElement.textContent =
-        "Waiting";
-
-
-    backendStatus.textContent =
-        "Not Connected";
-
-
-    backendStatus.classList.remove(
-        "connected"
-    );
-
-
-    backendStatus.classList.add(
-        "disconnected"
-    );
-
-
-    backendMessage.textContent =
-        "Waiting for tracker data";
-
-
-    liveJson.textContent =
-        "Waiting for BLE data...";
-
+    backendStatus.textContent = "Not Connected";
+    backendStatus.classList.remove("connected");
+    backendStatus.classList.add("disconnected");
+    backendMessage.textContent = "Waiting for tracker data";
+    liveJson.textContent = "Waiting for BLE data...";
 }
 
-
 /* =========================================================
-   BLE STATUS
+   STATUS + ERRORS
    ========================================================= */
 
-function setBLEStatus(
-    state,
-    message
-) {
+function setBLEStatus(state, message) {
+    bleStatus.textContent = message;
+    bleStatus.classList.remove("connected", "connecting", "disconnected");
+    bleStatus.classList.add(state);
 
-    bleStatus.textContent =
-        message;
-
-
-    bleStatus.classList.remove(
-        "connected",
-        "connecting",
-        "disconnected"
-    );
-
-
-    bleStatus.classList.add(
-        state
-    );
-
-
-    connectionIndicator.classList.remove(
-        "connected",
-        "connecting",
-        "disconnected"
-    );
-
-
-    connectionIndicator.classList.add(
-        state
-    );
-
-
-    connectionText.textContent =
-        message;
-
+    connectionIndicator.classList.remove("connected", "connecting", "disconnected");
+    connectionIndicator.classList.add(state);
+    connectionText.textContent = message;
 }
-
-
-/* =========================================================
-   ERROR
-   ========================================================= */
 
 function showError(message) {
-
-    console.error(
-        message
-    );
-
-
-    alert(
-        `BLE ERROR\n\n${message}`
-    );
-
+    console.error(message);
+    alert(`BLE ERROR\n\n${message}`);
 }
 
-
 /* =========================================================
-   INITIALIZE
+   INIT
    ========================================================= */
 
 function initializeApp() {
+    console.log("GeoGaurd Student App started.");
+    console.log("Service UUID:", SERVICE_UUID);
+    console.log("Characteristic UUID:", CHARACTERISTIC_UUID);
 
-    console.log(
-        "GeoGaurd Student App started."
-    );
-
-
-    console.log(
-        "Service UUID:",
-        SERVICE_UUID
-    );
-
-
-    console.log(
-        "Characteristic UUID:",
-        CHARACTERISTIC_UUID
-    );
-
-
-    setBLEStatus(
-        "disconnected",
-        "Disconnected"
-    );
-
-
-    backendStatus.textContent =
-        "Not Connected";
-
-
-    backendMessage.textContent =
-        "Waiting for tracker data";
-
+    setBLEStatus("disconnected", "Disconnected");
+    backendStatus.textContent = "Not Connected";
+    backendMessage.textContent = "Waiting for tracker data";
 }
-
-
-/* =========================================================
-   START APPLICATION
-   ========================================================= */
 
 initializeApp();
