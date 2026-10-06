@@ -37,6 +37,9 @@ let receivedBuffer = "";
 let watchdogTimer = null;
 let lastDataAt = 0;
 
+let followTimer = null;          // "Track from Backend" mode
+const FOLLOW_POLL_MS = 2000;
+
 /* ---------- Elements ---------- */
 const $ = (id) => document.getElementById(id);
 
@@ -55,9 +58,13 @@ const lastUpdateElement = $("lastUpdate");
 const backendStatus = $("backendStatus");
 const backendMessage = $("backendMessage");
 const liveJson = $("liveJson");
+const followId = $("followId");
+const followBtn = $("followBtn");
+const followStatus = $("followStatus");
 
 connectBtn.addEventListener("click", connectToTracker);
 disconnectBtn.addEventListener("click", disconnectTracker);
+followBtn.addEventListener("click", () => (followTimer ? stopFollowing() : startFollowing()));
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -69,6 +76,8 @@ async function connectToTracker() {
     console.log("===== GEOGAURD BLE CONNECTION START =====");
 
     try {
+        if (followTimer) stopFollowing();
+
         if (!navigator.bluetooth) {
             throw new Error("Web Bluetooth is not supported by this browser. Use Chrome on Android or desktop.");
         }
@@ -139,6 +148,7 @@ function markConnected() {
     setBLEStatus("connected", `Connected: ${(bluetoothDevice && bluetoothDevice.name) || "GG Tracker"}`);
     connectBtn.disabled = true;
     disconnectBtn.disabled = false;
+    followBtn.disabled = true;
     if (!lastTrackerData) dataStatusElement.textContent = "Connected";
 }
 
@@ -221,7 +231,7 @@ function processBLEValue(value) {
    PROCESS TRACKER DATA
    ========================================================= */
 
-function processTrackerData(data) {
+function processTrackerData(data, fromBackend = false) {
     if (!data || typeof data !== "object") {
         console.error("Invalid tracker data.");
         return;
@@ -229,7 +239,7 @@ function processTrackerData(data) {
 
     lastTrackerData = {
         studentId: data.studentId || data.id || "UNKNOWN",
-        trackerId: (bluetoothDevice && bluetoothDevice.name) || "GG Tracker",
+        trackerId: fromBackend ? "Backend" : ((bluetoothDevice && bluetoothDevice.name) || "GG Tracker"),
         latitude: Number(data.latitude ?? data.lat),
         longitude: Number(data.longitude ?? data.lon),
         battery: Number(data.battery ?? data.bat),
@@ -239,8 +249,82 @@ function processTrackerData(data) {
 
     updateStudentInformation(lastTrackerData);
     updateJSON(lastTrackerData);
+
+    if (fromBackend) {
+        dataStatusElement.textContent = "Receiving (backend)";
+        if (data.updatedAt) {
+            lastUpdateElement.textContent = new Date(data.updatedAt).toLocaleTimeString();
+        }
+        return;   // data already in backend - do not send it again
+    }
+
     dataStatusElement.textContent = "Receiving";
     sendToBackend(lastTrackerData);
+}
+
+/* =========================================================
+   TRACK FROM BACKEND (for testing without a BLE tracker)
+   Reads /students/<id> every 2 seconds and shows it in the same cards.
+   ========================================================= */
+
+async function followTick() {
+    const id = followId.value.trim();
+    if (!id) return;
+
+    try {
+        const res = await fetch(`${DB_URL}/students/${safeKey(id)}.json`, { cache: "no-store" });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+
+        const data = await res.json();
+
+        if (!data) {
+            followStatus.textContent = `No data for ${id} yet`;
+            dataStatusElement.textContent = "Waiting";
+            return;
+        }
+
+        processTrackerData(data, true);
+        followStatus.textContent = `Tracking ${id} - checked ${new Date().toLocaleTimeString()}`;
+        setBackendStatus("connected", "Connected", "Reading data from backend");
+
+    } catch (e) {
+        console.warn("Track from backend failed:", e);
+        followStatus.textContent = "Could not reach backend";
+        setBackendStatus("disconnected", "Failed", "Could not reach backend");
+    }
+}
+
+function startFollowing() {
+    if (isConnected) return;
+
+    if (typeof backendReady !== "function" || !backendReady()) {
+        followStatus.textContent = "Backend URL is not set (backend.js)";
+        return;
+    }
+
+    if (!followId.value.trim()) {
+        followStatus.textContent = "Enter a student ID first";
+        return;
+    }
+
+    followBtn.textContent = "Stop Tracking";
+    followId.disabled = true;
+    connectBtn.disabled = true;
+
+    followTick();
+    followTimer = setInterval(followTick, FOLLOW_POLL_MS);
+}
+
+function stopFollowing() {
+    clearInterval(followTimer);
+    followTimer = null;
+
+    followBtn.textContent = "Start Tracking";
+    followId.disabled = false;
+    connectBtn.disabled = false;
+    followStatus.textContent = "Not tracking";
+    dataStatusElement.textContent = "Waiting";
+    lastTrackerData = null;
 }
 
 /* =========================================================
@@ -379,6 +463,7 @@ function resetBLEState() {
     setBLEStatus("disconnected", "Disconnected");
     connectBtn.disabled = false;
     disconnectBtn.disabled = true;
+    followBtn.disabled = false;
     dataStatusElement.textContent = "Waiting";
 
     setBackendStatus("disconnected", "Not Connected", "Waiting for tracker data");
