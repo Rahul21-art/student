@@ -1,0 +1,315 @@
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>GeoGaurd Student App</title>
+
+    <link
+        rel="stylesheet"
+        href="style.css"
+    >
+</head>
+
+<body>
+
+    <div class="app-container">
+
+        <!-- HEADER -->
+        <header class="app-header">
+
+            <div>
+                <h1>GeoGaurd</h1>
+
+                <p>
+                    Student Safety Tracker
+                </p>
+            </div>
+
+            <div
+                id="connectionIndicator"
+                class="connection-indicator disconnected"
+            >
+                <span class="indicator-dot"></span>
+
+                <span id="connectionText">
+                    Disconnected
+                </span>
+            </div>
+
+        </header>
+
+
+        <!-- BLE CONNECTION -->
+        <section class="card">
+
+            <div class="card-header">
+
+                <div>
+                    <h2>Tracker Connection</h2>
+
+                    <p>
+                        Connect to your BLE tracker
+                    </p>
+                </div>
+
+                <span
+                    id="bleStatus"
+                    class="status-badge disconnected"
+                >
+                    Disconnected
+                </span>
+
+            </div>
+
+
+            <button
+                id="connectBtn"
+                class="primary-btn"
+            >
+                Connect Tracker
+            </button>
+
+
+            <button
+                id="disconnectBtn"
+                class="secondary-btn"
+                disabled
+            >
+                Disconnect
+            </button>
+
+        </section>
+
+
+        <!-- STUDENT INFORMATION -->
+        <section class="card">
+
+            <div class="card-header">
+
+                <div>
+                    <h2>Student Information</h2>
+
+                    <p>
+                        Information received from tracker
+                    </p>
+                </div>
+
+            </div>
+
+
+            <div class="info-grid">
+
+                <!-- STUDENT ID -->
+                <div class="info-box">
+
+                    <span class="info-label">
+                        Student ID
+                    </span>
+
+                    <strong id="studentId">
+                        --
+                    </strong>
+
+                </div>
+
+
+                <!-- BATTERY -->
+                <div class="info-box">
+
+                    <span class="info-label">
+                        Battery
+                    </span>
+
+                    <strong id="battery">
+                        --%
+                    </strong>
+
+                </div>
+
+
+                <!-- SOS -->
+                <div class="info-box">
+
+                    <span class="info-label">
+                        SOS Status
+                    </span>
+
+                    <strong
+                        id="sos"
+                        class="sos-off"
+                    >
+                        OFF
+                    </strong>
+
+                </div>
+
+
+                <!-- DATA STATUS -->
+                <div class="info-box">
+
+                    <span class="info-label">
+                        Data Status
+                    </span>
+
+                    <strong id="dataStatus">
+                        Waiting
+                    </strong>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- LOCATION -->
+        <section class="card">
+
+            <div class="card-header">
+
+                <div>
+                    <h2>Live Location</h2>
+
+                    <p>
+                        Current tracker coordinates
+                    </p>
+                </div>
+
+            </div>
+
+
+            <div class="location-grid">
+
+                <div class="location-box">
+
+                    <span>
+                        Latitude
+                    </span>
+
+                    <strong id="latitude">
+                        --
+                    </strong>
+
+                </div>
+
+
+                <div class="location-box">
+
+                    <span>
+                        Longitude
+                    </span>
+
+                    <strong id="longitude">
+                        --
+                    </strong>
+
+                </div>
+
+            </div>
+
+
+            <div class="location-time">
+
+                Last received:
+
+                <strong id="lastUpdate">
+                    --
+                </strong>
+
+            </div>
+
+        </section>
+
+
+        <!-- BACKEND STATUS -->
+        <section class="card">
+
+            <div class="card-header">
+
+                <div>
+                    <h2>Backend Connection</h2>
+
+                    <p>
+                        Tracker data transmission
+                    </p>
+                </div>
+
+                <span
+                    id="backendStatus"
+                    class="status-badge disconnected"
+                >
+                    Not Connected
+                </span>
+
+            </div>
+
+
+            <div class="backend-info">
+
+                <span>
+                    Data transmission:
+                </span>
+
+                <strong id="backendMessage">
+                    Waiting for tracker data
+                </strong>
+
+            </div>
+
+        </section>
+
+
+        <!-- LIVE JSON -->
+        <section class="card">
+
+            <div class="card-header">
+
+                <div>
+                    <h2>Live Tracker Data</h2>
+
+                    <p>
+                        Raw data received through BLE
+                    </p>
+                </div>
+
+            </div>
+
+
+            <div class="json-container">
+
+                <pre id="liveJson">Waiting for BLE data...</pre>
+
+            </div>
+
+        </section>
+
+
+        <!-- FOOTER -->
+        <footer class="app-footer">
+
+            <p>
+                GeoGaurd Student Safety System
+            </p>
+
+            <span>
+                BLE → Student App → Backend
+            </span>
+
+        </footer>
+
+    </div>
+
+
+    <script src="app.js"></script>
+
+</body>
+
+</html>
